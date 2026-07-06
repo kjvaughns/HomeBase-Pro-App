@@ -11,3 +11,4 @@
 - [expo-audio + expo-file-system v55 recording API](expo-audio-voice-capture.md) — use hook-based `useAudioRecorder`/`AudioModule` and `new File(uri).base64()`, not legacy expo-av / readAsStringAsync.
 - [api-server dev script is build-then-run](api-server-build-then-run.md) — backend code changes need a workflow restart to take effect; the dev script bundles once, it's not a watch server.
 - [RevenueCat "configured" must be a real boolean](revenuecat-configured-vs-promise-resolved.md) — a resolved setup promise ≠ configure() actually ran; calling native SDK methods before real config causes an uncatchable native crash.
+- [HomeBase safe-area insets convention](homebase-safe-area-insets.md) — bleed vs. double-counting top-padding bugs, and the `useTopInset()` guardrail hook that avoids both.

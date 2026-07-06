@@ -33,3 +33,20 @@ One caveat found in this codebase: an `ErrorBoundary` class component can sit
 above it), so its fallback UI cannot safely call `useSafeAreaInsets()` — it
 would throw with no provider mounted. Fixing that requires reordering
 providers, which is a separate, larger change from a normal insets fix.
+
+**Double-counting is the opposite bug, and just as common:** `useHeaderHeight()`
+already bakes in `insets.top` whenever a header exists anywhere in the
+ancestor navigator chain (stack or tab) — confirmed via
+`@react-navigation/elements` `Screen.tsx` source. Writing
+`headerHeight + insets.top` on the same container over-pads (found in
+SubscriptionScreen and ReviewsScreen). Never add both raw; use one or the
+other, or use the guardrail hook below.
+
+**Guardrail hook:** `artifacts/homebase/hooks/useTopInset.ts` exposes
+`useTopInset(extra?)` = `Math.max(useHeaderHeight(), useSafeAreaInsets().top) + extra`.
+This is safe whether or not a header exists in the ancestor chain (header
+present → headerHeight already covers insets.top; no header anywhere above,
+e.g. a tab screen configured with `headerShown: false` → headerHeight falls
+back to 0 and insets.top wins). Prefer this hook over manually combining
+`headerHeight`/`insets.top` in new top-padding code so screens stay correct
+if a header gets added/removed later in the navigator tree.

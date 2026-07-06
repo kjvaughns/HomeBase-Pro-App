@@ -82,6 +82,7 @@ User email replies feed back into the ticket thread automatically via a Resend i
 - **`theme.backgroundRoot`**, not `theme.background` — the theme object from `useTheme()` uses `backgroundRoot`.
 - **`theme.backgroundSecondary`**, not `theme.backgroundRootSecondary`.
 - **After any change to `lib-compat.d.ts`** run `pnpm exec tsc --noEmit` from `artifacts/homebase/` to verify zero errors.
+- **Top safe-area padding**: use `useTopInset(extra?)` from `hooks/useTopInset.ts` (`Math.max(headerHeight, insets.top) + extra`) instead of manually combining `useHeaderHeight()` and `useSafeAreaInsets().top` — adding both raw double-counts and over-pads (since `headerHeight` already includes `insets.top` whenever any ancestor header is shown), while using neither risks bleed under the status bar on `headerShown:false` screens.
 
 ## Pointers
 

@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect, useRef } from "react";
 import { StyleSheet, View, ScrollView, RefreshControl, Pressable, ActivityIndicator, AppState, TextInput, Modal } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useHeaderHeight } from "@react-navigation/elements";
+import { useTopInset } from "@/hooks/useTopInset";
 import { useFloatingTabBarHeight } from "@/hooks/useFloatingTabBarHeight";
 import { useLayout } from "@/hooks/useLayout";
 import { useNavigation } from "@react-navigation/native";
@@ -514,7 +514,7 @@ function ProfileMissingCTA({ navigation }: { navigation: any }) {
 export default function ProviderHomeScreen() {
   const { horizontalPadding } = useLayout();
   const insets = useSafeAreaInsets();
-  const headerHeight = useHeaderHeight();
+  const topInset = useTopInset(Spacing.lg);
   const tabBarHeight = useFloatingTabBarHeight();
   const navigation = useNavigation<any>();
   const { theme } = useTheme();
@@ -997,7 +997,7 @@ export default function ProviderHomeScreen() {
       <ThemedView style={styles.container}>
         <ScrollView
           contentContainerStyle={{
-            paddingTop: headerHeight + Spacing.lg,
+            paddingTop: topInset,
             paddingBottom: tabBarHeight + Spacing.xl,
             paddingHorizontal: horizontalPadding,
           }}
@@ -1022,14 +1022,14 @@ export default function ProviderHomeScreen() {
   return (
     <ThemedView style={styles.container}>
       {/* Layout audit ✓
-          paddingTop: headerHeight (useHeaderHeight with headerTransparent:true
-          includes the status-bar inset — no additional insets.top double-count)
-          + Spacing.lg visual breathing room.
+          paddingTop: useTopInset(Spacing.lg) = Math.max(headerHeight, insets.top)
+          + Spacing.lg — correct whether or not a header is shown anywhere in the
+          ancestor chain, with no double-counting.
           paddingBottom: tabBarHeight (useFloatingTabBarHeight = pill height +
           insets.bottom) + Spacing.xl clears the floating tab pill. */}
       <ScrollView
         contentContainerStyle={{
-          paddingTop: headerHeight + Spacing.lg,
+          paddingTop: topInset,
           paddingBottom: tabBarHeight + Spacing.xl,
           paddingHorizontal: horizontalPadding,
         }}

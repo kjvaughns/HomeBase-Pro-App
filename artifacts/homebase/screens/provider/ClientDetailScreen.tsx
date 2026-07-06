@@ -353,7 +353,7 @@ export default function ClientDetailScreen() {
   if (isLoading) {
     return (
       <ThemedView style={styles.container}>
-        <View style={[styles.notFound, { paddingTop: headerHeight }]}>
+        <View style={[styles.notFound, { paddingTop: headerHeight + Spacing.md }]}>
           <ActivityIndicator size="large" color={Colors.accent} />
         </View>
       </ThemedView>
@@ -363,7 +363,7 @@ export default function ClientDetailScreen() {
   if (!client) {
     return (
       <ThemedView style={styles.container}>
-        <View style={[styles.notFound, { paddingTop: headerHeight }]}>
+        <View style={[styles.notFound, { paddingTop: headerHeight + Spacing.md }]}>
           <ThemedText type="h2">Client not found</ThemedText>
         </View>
       </ThemedView>

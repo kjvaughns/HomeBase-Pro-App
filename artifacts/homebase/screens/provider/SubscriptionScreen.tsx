@@ -11,11 +11,11 @@ import {
   Platform,
 } from "react-native";
 import { openExternalUrl } from "@/lib/openExternalUrl";
-import { useHeaderHeight } from "@react-navigation/elements";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import type { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useTopInset } from "@/hooks/useTopInset";
 import { Feather } from "@expo/vector-icons";
 import Constants from "expo-constants";
 
@@ -76,7 +76,7 @@ interface CopyForState {
 export default function SubscriptionScreen() {
   const { theme, isDark } = useTheme();
   const { horizontalPadding } = useLayout();
-  const headerHeight = useHeaderHeight();
+  const topInset = useTopInset(Spacing.lg);
   const insets = useSafeAreaInsets();
   const navigation =
     useNavigation<NativeStackNavigationProp<RootStackParamList>>();
@@ -525,7 +525,7 @@ export default function SubscriptionScreen() {
     <ThemedView style={styles.container}>
       <ScrollView
         contentContainerStyle={{
-          paddingTop: headerHeight + insets.top,
+          paddingTop: topInset,
           paddingBottom: insets.bottom + Spacing.xl * 2,
           paddingHorizontal: horizontalPadding,
         }}

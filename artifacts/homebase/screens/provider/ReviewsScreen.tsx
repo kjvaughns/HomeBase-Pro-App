@@ -13,7 +13,7 @@ import {
 } from "react-native";
 import { KeyboardAvoidingView } from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useHeaderHeight } from "@react-navigation/elements";
+import { useTopInset } from "@/hooks/useTopInset";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { Feather, Ionicons } from "@expo/vector-icons";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -57,7 +57,7 @@ const REPLY_MAX_LENGTH = 1000;
 
 export default function ReviewsScreen() {
   const insets = useSafeAreaInsets();
-  const headerHeight = useHeaderHeight();
+  const topInset = useTopInset(Spacing.lg);
   const { horizontalPadding } = useLayout();
   const { theme } = useTheme();
   const { providerProfile } = useAuthStore();
@@ -451,7 +451,7 @@ export default function ReviewsScreen() {
         renderItem={renderReview}
         keyExtractor={(item) => item.id}
         contentContainerStyle={{
-          paddingTop: headerHeight + insets.top,
+          paddingTop: topInset,
           paddingBottom: insets.bottom + Spacing.xl,
           paddingHorizontal: horizontalPadding,
         }}
