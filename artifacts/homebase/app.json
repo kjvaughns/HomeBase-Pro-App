@@ -23,7 +23,8 @@
         "NSPhotoLibraryUsageDescription": "HomeBase accesses your photo library so you can attach photos of your home, projects, or documents to service requests and job records.",
         "NSPhotoLibraryAddUsageDescription": "HomeBase saves photos related to your home projects and service records to your photo library.",
         "NSLocationWhenInUseUsageDescription": "HomeBase uses your location to find nearby service providers and verify service addresses.",
-        "NSUserNotificationsUsageDescription": "HomeBase sends you appointment reminders, booking confirmations, and service updates."
+        "NSUserNotificationsUsageDescription": "HomeBase sends you appointment reminders, booking confirmations, and service updates.",
+        "NSMicrophoneUsageDescription": "HomeBase uses your microphone to transcribe voice notes for your AI assistant."
       },
       "entitlements": {
         "com.apple.security.application-groups": [
@@ -42,7 +43,8 @@
       "versionCode": 2,
       "permissions": [
         "ACCESS_COARSE_LOCATION",
-        "ACCESS_FINE_LOCATION"
+        "ACCESS_FINE_LOCATION",
+        "RECORD_AUDIO"
       ]
     },
     "web": {
@@ -95,7 +97,12 @@
       ],
       "expo-secure-store",
       "@bacons/apple-targets",
-      "expo-audio"
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "HomeBase uses your microphone to transcribe voice notes for your AI assistant."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

@@ -9,6 +9,8 @@ import {
   Platform,
   ActivityIndicator,
   Animated,
+  Alert,
+  Linking,
 } from "react-native";
 import { KeyboardAvoidingView } from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -125,7 +127,17 @@ export default function ProviderAIAssistantScreen() {
       setVoiceError(null);
       const permission = await AudioModule.requestRecordingPermissionsAsync();
       if (!permission.granted) {
-        setVoiceError("Microphone permission is required to use voice input.");
+        Alert.alert(
+          "Microphone Access Required",
+          "HomeBase needs access to your microphone to transcribe voice notes. Please enable it in Settings.",
+          [
+            { text: "Not Now", style: "cancel" },
+            {
+              text: "Open Settings",
+              onPress: () => Linking.openSettings(),
+            },
+          ]
+        );
         return;
       }
       await setAudioModeAsync({
