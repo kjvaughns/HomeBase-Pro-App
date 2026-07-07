@@ -17,8 +17,8 @@ import {
 } from "react-native-gesture-handler";
 import { scheduleOnRN } from "react-native-worklets";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useHeaderHeight } from "@react-navigation/elements";
 import { useFloatingTabBarHeight } from "@/hooks/useFloatingTabBarHeight";
+import { useTopInset } from "@/hooks/useTopInset";
 import { useLayout } from "@/hooks/useLayout";
 import { useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
@@ -1040,7 +1040,7 @@ function MonthView({
 
 export default function ScheduleScreen() {
   const insets = useSafeAreaInsets();
-  const headerHeight = useHeaderHeight();
+  const topInset = useTopInset(Spacing.md);
   const { horizontalPadding } = useLayout();
   const tabBarHeight = useFloatingTabBarHeight();
   const navigation =
@@ -1433,11 +1433,11 @@ export default function ScheduleScreen() {
   return (
     <ThemedView style={styles.container}>
       {/* ── Fixed Header ── */}
-      {/* Layout audit ✓: paddingTop: headerHeight (transparent header, already
-          includes status-bar inset) + Spacing.md — no SafeAreaView double-count.
-          Content bottom padding: tabBarHeight (useFloatingTabBarHeight = pill +
+      {/* Layout audit ✓: paddingTop via useTopInset(Spacing.md) = Math.max(headerHeight,
+          insets.top) + Spacing.md — safe for both transparent-header and headerShown:false
+          cases, no double-counting.  Content bottom: tabBarHeight (floating pill +
           insets.bottom). Both applied in the content/route View below. */}
-      <View style={[styles.header, { paddingTop: headerHeight + Spacing.md, paddingHorizontal: horizontalPadding }]}>
+      <View style={[styles.header, { paddingTop: topInset, paddingHorizontal: horizontalPadding }]}>
         {/* Title Row */}
         <View style={styles.headerRow}>
           <ThemedText style={styles.headerTitle}>

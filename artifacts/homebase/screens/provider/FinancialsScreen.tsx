@@ -14,8 +14,8 @@ import {
 } from "react-native";
 import { openExternalUrl } from "@/lib/openExternalUrl";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useHeaderHeight } from "@react-navigation/elements";
 import { useFloatingTabBarHeight } from "@/hooks/useFloatingTabBarHeight";
+import { useTopInset } from "@/hooks/useTopInset";
 import { useLayout } from "@/hooks/useLayout";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useNavigation, useFocusEffect, useRoute, type RouteProp } from "@react-navigation/native";
@@ -1153,7 +1153,7 @@ type FinancialsRouteParamList = { FinancialsTab: FinancialsTabParams | undefined
 
 export default function FinancialsScreen() {
   const insets = useSafeAreaInsets();
-  const headerHeight = useHeaderHeight();
+  const topInset = useTopInset(Spacing.md);
   const tabBarHeight = useFloatingTabBarHeight();
   const { horizontalPadding } = useLayout();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
@@ -2285,13 +2285,13 @@ export default function FinancialsScreen() {
       <ThemedView style={styles.container}>
         {howModal}
         {subGateModal}
-        {/* Layout audit ✓: paddingTop: headerHeight (transparent header
-            includes status-bar inset, no extra insets.top) + Spacing.md.
-            paddingBottom: tabBarHeight (useFloatingTabBarHeight = floating pill
-            + insets.bottom) + Spacing.xl — content fully clears floating tab. */}
+        {/* Layout audit ✓: paddingTop via useTopInset(Spacing.md) = Math.max(headerHeight,
+            insets.top) + Spacing.md — safe for both transparent-header and headerShown:false
+            cases, no double-counting.  paddingBottom: tabBarHeight (useFloatingTabBarHeight
+            = floating pill + insets.bottom) + Spacing.xl — content fully clears floating tab. */}
         <ScrollView
           contentContainerStyle={{
-            paddingTop: headerHeight + Spacing.md,
+            paddingTop: topInset,
             paddingBottom: tabBarHeight + Spacing.xl,
             paddingHorizontal: horizontalPadding,
           }}
@@ -2341,7 +2341,7 @@ export default function FinancialsScreen() {
           ListHeaderComponent={<SharedHeader />}
           ListEmptyComponent={<IncomeEmpty />}
           contentContainerStyle={{
-            paddingTop: headerHeight + Spacing.md,
+            paddingTop: topInset,
             paddingBottom: tabBarHeight + Spacing.xl,
             paddingHorizontal: horizontalPadding,
           }}
@@ -2410,7 +2410,7 @@ export default function FinancialsScreen() {
           }, 80);
         }}
         contentContainerStyle={{
-          paddingTop: headerHeight + Spacing.md,
+          paddingTop: topInset,
           paddingBottom: tabBarHeight + Spacing.xl,
           paddingHorizontal: horizontalPadding,
         }}

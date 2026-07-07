@@ -3,8 +3,8 @@ import { StyleSheet, View, ScrollView, Switch, Alert, Modal, Pressable } from "r
 import * as WebBrowser from "expo-web-browser";
 import Constants from "expo-constants";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useHeaderHeight } from "@react-navigation/elements";
 import { useFloatingTabBarHeight } from "@/hooks/useFloatingTabBarHeight";
+import { useTopInset } from "@/hooks/useTopInset";
 import { useLayout } from "@/hooks/useLayout";
 import { useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
@@ -33,7 +33,7 @@ import { apiRequest } from "@/lib/query-client";
 export default function ProviderMoreScreen() {
   const { horizontalPadding } = useLayout();
   const insets = useSafeAreaInsets();
-  const headerHeight = useHeaderHeight();
+  const topInset = useTopInset(Spacing.lg);
   const tabBarHeight = useFloatingTabBarHeight();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { theme, isDark } = useTheme();
@@ -140,13 +140,13 @@ export default function ProviderMoreScreen() {
 
   return (
     <ThemedView style={styles.container}>
-      {/* Layout audit ✓: paddingTop: headerHeight (transparent header includes
-          status-bar inset, no additional insets.top needed) + Spacing.lg.
-          paddingBottom: tabBarHeight (useFloatingTabBarHeight = pill height +
-          insets.bottom) + Spacing.xl clears floating tab pill. */}
+      {/* Layout audit ✓: paddingTop via useTopInset(Spacing.lg) = Math.max(headerHeight,
+          insets.top) + Spacing.lg — safe for both transparent-header and headerShown:false
+          cases, no double-counting.  paddingBottom: tabBarHeight (useFloatingTabBarHeight
+          = pill height + insets.bottom) + Spacing.xl clears floating tab pill. */}
       <ScrollView
         contentContainerStyle={{
-          paddingTop: headerHeight + Spacing.lg,
+          paddingTop: topInset,
           paddingBottom: tabBarHeight + Spacing.xl,
           paddingHorizontal: horizontalPadding,
         }}
