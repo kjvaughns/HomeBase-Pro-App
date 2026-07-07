@@ -1,0 +1,69 @@
+# HomeBase — Root-Cause Diagnosis of the 6 "Not Fixed" Bugs + Tasks
+
+## Why the last round didn't work (read first)
+
+Two structural realities, both verified on live `origin/main`:
+
+1. **Half-finished Expo Router migration.** The app was moved into a monorepo; the live Expo app is now `artifacts/homebase/` (`package.json main: "expo-router/entry"`). But `app/` has only 3 files — all **91 screens + 10 navigators still run through the OLD React Navigation tree**, mounted in `artifacts/homebase/app/index.tsx` via `<NavigationContainer><RootStackNavigator/></NavigationContainer>`. So screen-level edits DO render — but several of these bugs live in the **shared wiring** (the container, theme, tab bar) that last round never touched.
+2. **Two disconnected theme systems.** `hooks/useTheme.ts` reads `useColorScheme()` directly; `state/themeStore.ts` is a separate in-app light/dark/system toggle that **nothing consumes**. The in-app theme setting is dead, and neither feeds the navigation container.
+
+Replit's fixes were real but scoped to individual screens (`6966dff` recolored 2 screens; `ec9fe8c` added `useTopInset` to 3 screens) — they never addressed the container/theme root cause, so it stayed whack-a-mole.
+
+> Implement on a branch off latest `origin/main`, under `artifacts/homebase/`. (This session's clone is on a pre-migration branch with the old `client/` tree.)
+
+---
+
+## TASK 1 — Gray background in dark mode (HIGH — root cause of 3 bugs)
+**Root cause:** `artifacts/homebase/app/index.tsx` → `AppContent` renders `<NavigationContainer linking={linking}>` with **no `theme` prop**. React Navigation defaults to `DefaultTheme` (light), whose `colors.background = rgb(242,242,242)` — the gray. It shows anywhere a screen doesn't fully paint (Schedule/Finance/More), in the safe-area strip, and behind the glass tab bar.
+**Fix:** derive and pass a themed nav theme:
+```ts
+import { DarkTheme, DefaultTheme } from "@react-navigation/native";
+const { isDark } = useTheme();
+const navTheme = isDark
+  ? { ...DarkTheme, colors: { ...DarkTheme.colors, background: Colors.dark.background, card: Colors.dark.card, text: Colors.dark.text, border: Colors.dark.border } }
+  : { ...DefaultTheme, colors: { ...DefaultTheme.colors, background: Colors.light.background } };
+// <NavigationContainer theme={navTheme} linking={linking}>
+```
+Fixes gray bg app-wide + the safe-area color + most of the glass-nav muddiness in one change.
+**File:** `artifacts/homebase/app/index.tsx`
+
+## TASK 2 — Unify the theme source so dark mode is actually recognized
+**Root cause:** `hooks/useTheme.ts` / `hooks/useColorScheme.ts` ignore `state/themeStore.ts`. Any in-app theme toggle does nothing; screens follow raw OS scheme, and there's no single source feeding Task 1.
+**Fix:** make `useTheme`/`useColorScheme` derive from `themeStore.getColorScheme()` (subscribe to the store AND to `Appearance.addChangeListener`). Ensure `hydrate()` runs before first paint (it's called in `app/index.tsx` — gate initial render on `isHydrated` to avoid a light flash).
+**Files:** `hooks/useTheme.ts`, `hooks/useColorScheme.ts`, `state/themeStore.ts`
+
+## TASK 3 — Safe-area bleed on Schedule / Finance / More
+**Root cause:** the `useTopInset` sweep (`ec9fe8c`) was applied to only ProviderHomeScreen, ReviewsScreen, SubscriptionScreen (grep-confirmed). The other tab screens (headerShown:false) still bleed under the status bar.
+**Fix:** apply `useTopInset()` (or `SafeAreaView edges={['top']}`) to `ScheduleScreen.tsx`, `FinancialsScreen.tsx`, `ProviderMoreScreen.tsx`, and audit every tab screen. **Better:** fix once in a shared screen wrapper / at the tab navigator so all screens inherit top inset instead of per-screen patching.
+**Files:** `screens/provider/ScheduleScreen.tsx`, `FinancialsScreen.tsx`, `ProviderMoreScreen.tsx` (+ ideally a shared `ScreenContainer`)
+
+## TASK 4 — "No upcoming jobs" card is enormous / off-screen
+**Root cause:** the shared `<EmptyState>` (built for full-screen use — vertically centers via flex/minHeight) is embedded inline inside a `<GlassCard style={styles.emptyCard}>` in the Home feed (`ProviderHomeScreen.tsx` ~1266-1280), so it stretches to fill. Regression from routing the home empty through the full-screen EmptyState.
+**Fix:** add a `compact`/`inline` variant to `EmptyState` (small padding, no `flex:1`/`minHeight`, smaller icon) and use it for in-feed empties; keep the full variant for whole-screen empties.
+**Files:** `components/EmptyState.tsx`, `screens/provider/ProviderHomeScreen.tsx`
+
+## TASK 5 — Liquid-glass nav bar can't decide light/dark
+**Root cause:** the BlurView tint *does* switch on `isDark` (`ProviderTabNavigator.tsx:85-86`), but it floats over the light-gray default container background (Task 1), and `isDark` itself is unreliable (Task 2). A dark blur over light-gray reads as neither.
+**Fix:** mostly resolved by Tasks 1+2. Additionally: ensure the tab-bar wrapper background is `transparent` and give the BlurView a themed fallback `backgroundColor` for platforms where blur is weak.
+**File:** `navigation/ProviderTabNavigator.tsx`
+
+## TASK 6 — Voice capture not working
+**Root cause:** the screen uses `expo-audio` (`useAudioRecorder`, `AudioModule.requestRecordingPermissionsAsync`, `RecordingPresets`) but app.json has **no `expo-audio` config plugin** and no iOS `NSMicrophoneUsageDescription` — so on a real build the mic permission/native setup is missing. Separately, `expo-speech` is imported (that's text-TO-speech, not transcription); the record→transcribe pipeline must hit a real STT endpoint.
+**Fix:** add `expo-audio` to app.json `plugins` with `microphonePermission` (and iOS `infoPlist.NSMicrophoneUsageDescription`); rebuild a dev client (not Expo Go); verify the transcription request returns text and populates the Ask AI input.
+**Files:** `app.json`, `screens/provider/ProviderAIAssistantScreen.tsx`, server transcribe route
+
+## TASK 7 — "In-app purchases not available on this device" (CONFIG, not code)
+**Root cause:** `isPurchasesAvailable()` returns `Platform.OS === "ios"`, then `configurePurchases` needs `EXPO_PUBLIC_REVENUECAT_API_KEY` + the native `react-native-purchases` module + StoreKit products. The message appears when: (a) testing in **Expo Go** (native module absent) → must use a dev-client/TestFlight build; (b) `EXPO_PUBLIC_REVENUECAT_API_KEY` not set in the build env; (c) product/entitlement not configured in App Store Connect + RevenueCat, or no sandbox tester signed in; (d) Android/web (IAP is iOS-only by design here). `43ad7fb` stopped the crash but can't supply key/products/build.
+**Fix (configuration, verify in order):** confirm `react-native-purchases` is installed + its config plugin is in app.json; set `EXPO_PUBLIC_REVENUECAT_API_KEY` in EAS env; create the subscription product + entitlement in App Store Connect and map it in RevenueCat; build a **dev client or TestFlight** build; sign into a **sandbox Apple ID** on the device. It will never work in Expo Go or the web preview.
+**Areas:** `app.json` plugins, EAS env vars, App Store Connect, RevenueCat dashboard
+
+---
+
+## Testing / verification honesty
+These are root-caused from the live `origin/main` code (read-only). I can't run your iOS EAS/simulator build in this environment to visually confirm — so after fixes, verify on a **real iOS device in dark mode**: (1) every tab's background is dark, (2) no content under the status bar on Schedule/Finance/More, (3) the home empty state is a small card, (4) the tab-bar blur reads as dark, (5) voice populates the Ask AI input on a dev build, (6) Subscribe works on a **TestFlight build with a sandbox account**. Tasks 1–6 are code-verifiable; Task 7 is environment/config and only testable on a real signed build.
+
+## Suggested order
+1. Tasks 1 + 2 (theme container + unified source) — fixes gray bg, safe-area color, and nav-bar mode together.
+2. Task 3 (safe-area on the 3 tabs) and Task 4 (empty-state variant) — quick, isolated.
+3. Task 6 (voice: plugin + permission + rebuild).
+4. Task 7 (IAP config) — separate track; verify on TestFlight.
