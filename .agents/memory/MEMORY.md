@@ -2,6 +2,8 @@
 - [Recurring date math must use UTC](recurring-date-math-utc.md) — recurringJobsService.ts dedup key is UTC-based; local-timezone Date getters/setters cause off-by-one-day bugs.
 - [notificationService category literal](notification-category-literal.md) — dispatchNotification's category param is a strict union (bookings/invoices/messages/reminders), not free text; check the type before adding new call sites.
 - [Expo web preview renders blank](expo-web-preview-blank.md) — screenshot/Playwright tools against the homebase Expo workflow show a blank page even on a clean build; treat as environment limitation, verify via typecheck + code/DB review instead.
+- [expo-notifications web crash](expo-notifications-web.md) — NotificationsEmitter.js runs LegacyEventEmitter at module level on web; fix with a .web.ts no-op stub for any hook that imports expo-notifications.
+- [Metro enhanceMiddleware scope](metro-enhance-middleware.md) — enhanceMiddleware only wraps Metro bundle requests; Expo Express serves the HTML document at a higher layer and cannot be intercepted this way.
 - [This project's DB tooling defaults to the wrong database](drizzle-config-wrong-db-url.md) — `db push` AND the agent's `executeSql` tool both hit DATABASE_URL by default; app only uses SUPABASE_DATABASE_URL. Use a direct pg.Pool for migrations/verification.
 - [api-server pre-existing TS error baseline](api-server-preexisting-ts-errors.md) — routes.ts has ~1600 pre-existing TS errors (systemic IdParams/return-value patterns); check specific lines, not total count.
 - [Sed-based JSX attribute substitution breaks syntax](sed-jsx-attribute-substitution.md) — replacing `attr="value"` with an identifier via sed needs `{}` braces or it produces invalid JSX; verify with tsc after any bulk sweep.
