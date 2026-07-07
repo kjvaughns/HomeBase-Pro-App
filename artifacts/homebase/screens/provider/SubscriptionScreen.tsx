@@ -17,7 +17,7 @@ import type { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTopInset } from "@/hooks/useTopInset";
 import { Feather } from "@expo/vector-icons";
-import Constants from "expo-constants";
+import Constants, { ExecutionEnvironment } from "expo-constants";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ThemedText } from "@/components/ThemedText";
@@ -118,6 +118,23 @@ export default function SubscriptionScreen() {
 
   const useIAP = isPurchasesAvailable();
 
+  // Detect contexts where IAP is unavailable on a native device:
+  //   1. Android — Play Billing not yet configured (Android IAP is a separate task)
+  //   2. Expo Go on iOS — react-native-purchases requires a dev-client or
+  //      TestFlight/App Store build; the native module is absent in Expo Go
+  //      (executionEnvironment === "storeClient")
+  // Platform.OS === "web" is intentionally excluded — web keeps using Stripe.
+  const isRunningInExpoGo =
+    Platform.OS !== "web" &&
+    Constants.executionEnvironment === ExecutionEnvironment.StoreClient;
+  const isNativeNonIOS = Platform.OS === "android" || isRunningInExpoGo;
+
+  // Products-failed-to-load state — set when offerings come back empty on a
+  // real native build (distinct from a paywall presentation failure). Shown
+  // as an inline card with a retry button above the main subscribe button.
+  const [productsError, setProductsError] = useState<string | null>(null);
+  const [productsLoading, setProductsLoading] = useState(false);
+
   // Fetch live price + (dev only) full diagnostics on mount when on iOS.
   // getRevenueCatLivePrice() is safe for production — no raw JSON logging.
   // getRevenueCatDiagnostics() is heavy (full JSON logging) and only runs in dev.
@@ -127,6 +144,7 @@ export default function SubscriptionScreen() {
 
     (async () => {
       try {
+        setProductsLoading(true);
         if (__DEV__) {
           // Dev: run full diagnostics (includes price + heavy logging)
           setDiagnosticsLoading(true);
@@ -136,16 +154,39 @@ export default function SubscriptionScreen() {
           if (result.firstPackagePriceString) {
             setLivePrice(result.firstPackagePriceString);
           }
+          // Surface a products error if offerings are empty
+          if (!result.offeringsAvailable && result.error) {
+            setProductsError(
+              "Could not load subscription options — please try again. If the problem persists, check your connection or contact support.",
+            );
+          }
         } else {
           // Production: lightweight price fetch only — no raw JSON logging
           const price = await getRevenueCatLivePrice();
           if (cancelled) return;
-          if (price) setLivePrice(price);
+          if (price) {
+            setLivePrice(price);
+            setProductsError(null);
+          } else {
+            // null price means offerings returned empty or SDK isn't configured —
+            // show a retry-able error card rather than a blank/silent failure.
+            setProductsError(
+              "Could not load subscription options — please try again.",
+            );
+          }
         }
       } catch {
         // Best-effort; never crash the screen
+        if (!cancelled) {
+          setProductsError(
+            "Could not load subscription options — please try again.",
+          );
+        }
       } finally {
-        if (!cancelled) setDiagnosticsLoading(false);
+        if (!cancelled) {
+          setDiagnosticsLoading(false);
+          setProductsLoading(false);
+        }
       }
     })();
 
@@ -570,6 +611,133 @@ export default function SubscriptionScreen() {
               {copy.body}
             </ThemedText>
 
+            {/* ── Non-iOS native banner ─────────────────────────────────────
+                On Android (and any future native platform without IAP configured),
+                replace the subscribe/manage controls with a clear explanation so
+                the user knows to use the iOS app rather than seeing a confusing
+                error or an unintended Stripe web flow. */}
+            {isNativeNonIOS && showSubscribeButton ? (
+              <View
+                style={[
+                  styles.iOSOnlyBanner,
+                  {
+                    backgroundColor: isDark
+                      ? "rgba(56,174,95,0.10)"
+                      : "rgba(56,174,95,0.07)",
+                    borderColor: Colors.accent + "33",
+                  },
+                ]}
+                testID="ios-only-banner"
+              >
+                <Feather name="smartphone" size={20} color={Colors.accent} />
+                <View style={styles.iOSOnlyText}>
+                  <ThemedText
+                    style={[styles.iOSOnlyTitle, { color: theme.text }]}
+                    testID="text-ios-only-title"
+                  >
+                    Subscriptions are only available in the iOS app
+                  </ThemedText>
+                  <ThemedText
+                    style={[styles.iOSOnlyBody, { color: theme.textSecondary }]}
+                    testID="text-ios-only-body"
+                  >
+                    Download HomeBase from the App Store on your iPhone or iPad
+                    to subscribe to HomeBase Pro.
+                  </ThemedText>
+                  <Pressable
+                    onPress={() =>
+                      Linking.openURL(
+                        "https://apps.apple.com/app/homebase/id6448793498",
+                      ).catch(() => {})
+                    }
+                    hitSlop={8}
+                    testID="button-app-store-link"
+                  >
+                    <ThemedText
+                      style={[styles.iOSOnlyLink, { color: Colors.accent }]}
+                    >
+                      Get HomeBase on the App Store →
+                    </ThemedText>
+                  </Pressable>
+                </View>
+              </View>
+            ) : null}
+
+            {/* ── Products-failed-to-load error card ────────────────────────
+                Shown when RevenueCat offerings return empty or throw on a real
+                native build. Gives the user a retry path rather than a silent
+                blank screen. Distinct from the paywallFailure card (which fires
+                after a presentPaywall() call). */}
+            {useIAP && productsError && !isSubscribed ? (
+              <View
+                style={[
+                  styles.productsErrorCard,
+                  {
+                    backgroundColor: isDark ? "#2a1a1a" : "#fff5f5",
+                    borderColor: Colors.error + "40",
+                  },
+                ]}
+                testID="products-error-card"
+              >
+                <View style={styles.failureHeader}>
+                  <Feather
+                    name="alert-circle"
+                    size={14}
+                    color={Colors.error}
+                  />
+                  <ThemedText
+                    style={[styles.productsErrorText, { color: Colors.error }]}
+                    testID="text-products-error"
+                  >
+                    {productsError}
+                  </ThemedText>
+                </View>
+                <Pressable
+                  onPress={() => {
+                    setProductsError(null);
+                    setLivePrice(null);
+                    // Re-trigger the useEffect by toggling a refresh key would
+                    // be complex; instead call getRevenueCatLivePrice directly.
+                    setProductsLoading(true);
+                    getRevenueCatLivePrice()
+                      .then((price) => {
+                        if (price) {
+                          setLivePrice(price);
+                          setProductsError(null);
+                        } else {
+                          setProductsError(
+                            "Could not load subscription options — please try again.",
+                          );
+                        }
+                      })
+                      .catch(() => {
+                        setProductsError(
+                          "Could not load subscription options — please try again.",
+                        );
+                      })
+                      .finally(() => setProductsLoading(false));
+                  }}
+                  disabled={productsLoading}
+                  hitSlop={8}
+                  testID="button-products-retry"
+                >
+                  {productsLoading ? (
+                    <ActivityIndicator
+                      size="small"
+                      color={Colors.accent}
+                      style={{ marginTop: 4 }}
+                    />
+                  ) : (
+                    <ThemedText
+                      style={[styles.productsRetryLink, { color: Colors.accent }]}
+                    >
+                      Retry
+                    </ThemedText>
+                  )}
+                </Pressable>
+              </View>
+            ) : null}
+
             {/* Price-aware info row — shown on all non-subscribed states so
                 Apple Review can see pricing before the purchase confirmation.
                 Satisfies App Review rule 3.1.1 (price must be visible in app).
@@ -639,9 +807,14 @@ export default function SubscriptionScreen() {
               </View>
             )}
 
-            {/* Primary action — partners get no billing controls at all
-                (their access is admin-granted, not billed). */}
-            {isPartner ? null : showSubscribeButton ? (
+            {/* Primary action — three independent conditions to avoid
+                any ternary fall-through bugs:
+                  1. Partners: no billing controls (admin-granted access)
+                  2. Unsubscribed on Android/Expo Go: no button — the
+                     iOS-only banner above is the actionable UI
+                  3. Unsubscribed on iOS native build: Subscribe button
+                  4. Subscribed (any platform): Manage subscription button */}
+            {isPartner ? null : isNativeNonIOS && showSubscribeButton ? null : showSubscribeButton ? (
               <Pressable
                 style={({ pressed }) => [
                   styles.button,
@@ -1408,6 +1581,51 @@ const styles = StyleSheet.create({
   failureProductTrial: {
     ...Typography.caption2,
     lineHeight: 16,
+    marginTop: 2,
+  },
+  iOSOnlyBanner: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: Spacing.md,
+    borderRadius: BorderRadius.card,
+    borderWidth: 1,
+    padding: Spacing.md,
+    marginBottom: Spacing.md,
+    alignSelf: "stretch",
+  },
+  iOSOnlyText: {
+    flex: 1,
+    gap: Spacing.xs,
+  },
+  iOSOnlyTitle: {
+    ...Typography.subhead,
+    fontWeight: "700",
+  },
+  iOSOnlyBody: {
+    ...Typography.caption1,
+    lineHeight: 18,
+  },
+  iOSOnlyLink: {
+    ...Typography.caption1,
+    fontWeight: "600",
+    marginTop: 4,
+  },
+  productsErrorCard: {
+    borderRadius: BorderRadius.card,
+    borderWidth: 1,
+    padding: Spacing.sm,
+    gap: Spacing.xs,
+    marginBottom: Spacing.sm,
+    alignSelf: "stretch",
+  },
+  productsErrorText: {
+    ...Typography.caption1,
+    flex: 1,
+    lineHeight: 18,
+  },
+  productsRetryLink: {
+    ...Typography.caption1,
+    fontWeight: "600",
     marginTop: 2,
   },
   partnerCard: {},

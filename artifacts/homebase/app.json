@@ -96,6 +96,7 @@
         }
       ],
       "expo-secure-store",
+      "react-native-purchases",
       "@bacons/apple-targets",
       [
         "expo-audio",
