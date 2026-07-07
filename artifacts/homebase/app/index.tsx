@@ -1,6 +1,6 @@
 import React, { useEffect } from "react";
 // @ts-ignore
-import { NavigationContainer, NavigationIndependentTree } from "@react-navigation/native";
+import { NavigationContainer, NavigationIndependentTree, DarkTheme, DefaultTheme } from "@react-navigation/native";
 import { StatusBar } from "expo-status-bar";
 // @ts-ignore
 import * as Updates from "expo-updates";
@@ -15,6 +15,7 @@ import { useAuthStore } from "@/state/authStore";
 import { initNetworkStore } from "@/state/networkStore";
 import { initAnalytics, identifyUser, resetAnalytics } from "@/lib/analytics";
 import { useTheme } from "@/hooks/useTheme";
+import { Colors } from "@/constants/theme";
 import {
   configurePurchases,
   loginPurchasesUser,
@@ -37,10 +38,36 @@ const linking = {
 
 function AppContent() {
   const { isDark } = useTheme();
+  const isHydrated = useThemeStore((s) => s.isHydrated);
+
+  if (!isHydrated) return null;
+
+  const navTheme = isDark
+    ? {
+        ...DarkTheme,
+        colors: {
+          ...DarkTheme.colors,
+          background: Colors.dark.backgroundRoot,
+          card: Colors.dark.backgroundRoot,
+          text: Colors.dark.text,
+          border: Colors.dark.border,
+        },
+      }
+    : {
+        ...DefaultTheme,
+        colors: {
+          ...DefaultTheme.colors,
+          background: Colors.light.backgroundRoot,
+          card: Colors.light.backgroundRoot,
+          text: Colors.light.text,
+          border: Colors.light.border,
+        },
+      };
+
   return (
     <>
       <NavigationIndependentTree>
-        <NavigationContainer linking={linking}>
+        <NavigationContainer linking={linking} theme={navTheme}>
           <RootStackNavigator />
         </NavigationContainer>
       </NavigationIndependentTree>
