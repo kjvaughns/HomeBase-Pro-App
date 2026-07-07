@@ -1267,6 +1267,7 @@ export default function ProviderHomeScreen() {
           <Animated.View entering={FadeInDown.delay(280).duration(400)}>
             <GlassCard style={styles.emptyCard}>
               <EmptyState
+                compact
                 icon="calendar"
                 title="No upcoming jobs"
                 description="You don't have any jobs scheduled for today or the future."
@@ -1475,6 +1476,7 @@ export default function ProviderHomeScreen() {
           ) : insightsError || !insightsData?.insights ? (
             <GlassCard style={styles.insightsEmptyCard}>
               <EmptyState
+                compact
                 icon="alert-circle"
                 title="Insights unavailable"
                 description="We had trouble loading your business analytics. Pull down to refresh."
@@ -1483,6 +1485,7 @@ export default function ProviderHomeScreen() {
           ) : !insightsData.insights.hasAnyData ? (
             <GlassCard style={styles.insightsEmptyCard}>
               <EmptyState
+                compact
                 icon="bar-chart-2"
                 title="No data yet"
                 description="Your business insights will appear here once you complete your first few jobs."

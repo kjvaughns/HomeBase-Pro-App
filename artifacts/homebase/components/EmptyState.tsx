@@ -15,6 +15,7 @@ interface EmptyStateProps {
   title: string;
   description: string;
   testID?: string;
+  compact?: boolean;
   primaryAction?: {
     label: string;
     onPress: () => void;
@@ -31,28 +32,32 @@ export function EmptyState({
   title,
   description,
   testID,
+  compact = false,
   primaryAction,
   secondaryAction,
 }: EmptyStateProps) {
   const { theme } = useTheme();
 
   return (
-    <View style={styles.container} testID={testID}>
+    <View style={[styles.container, compact && styles.containerCompact]} testID={testID}>
       {image ? (
-        <Image source={image} style={styles.image} contentFit="contain" />
+        <Image source={image} style={compact ? styles.imageCompact : styles.image} contentFit="contain" />
       ) : icon ? (
-        <View style={[styles.iconCircle, { backgroundColor: Colors.accentLight }]}>
-          <Feather name={icon} size={36} color={Colors.accent} />
+        <View style={[
+          compact ? styles.iconCircleCompact : styles.iconCircle,
+          { backgroundColor: Colors.accentLight },
+        ]}>
+          <Feather name={icon} size={compact ? 20 : 36} color={Colors.accent} />
         </View>
       ) : null}
 
-      <ThemedText type="h2" style={styles.title}>
+      <ThemedText type={compact ? "label" : "h2"} style={compact ? styles.titleCompact : styles.title}>
         {title}
       </ThemedText>
 
       <ThemedText
         type="body"
-        style={[styles.description, { color: theme.textSecondary }]}
+        style={[compact ? styles.descriptionCompact : styles.description, { color: theme.textSecondary }]}
       >
         {description}
       </ThemedText>
@@ -89,10 +94,20 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     paddingHorizontal: Spacing["3xl"],
   },
+  containerCompact: {
+    flex: undefined,
+    paddingVertical: Spacing.lg,
+    paddingHorizontal: Spacing.xl,
+  },
   image: {
     width: 200,
     height: 200,
     marginBottom: Spacing.xl,
+  },
+  imageCompact: {
+    width: 80,
+    height: 80,
+    marginBottom: Spacing.sm,
   },
   iconCircle: {
     width: 88,
@@ -102,13 +117,29 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginBottom: Spacing.lg,
   },
+  iconCircleCompact: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: Spacing.sm,
+  },
   title: {
     textAlign: "center",
     marginBottom: Spacing.sm,
   },
+  titleCompact: {
+    textAlign: "center",
+    marginBottom: Spacing.xs,
+  },
   description: {
     textAlign: "center",
     marginBottom: Spacing.xl,
+  },
+  descriptionCompact: {
+    textAlign: "center",
+    marginBottom: 0,
   },
   actions: {
     gap: Spacing.md,
