@@ -32,6 +32,10 @@ const linking = {
       Payment: "payment-result",
       JobDetail: "job/:jobId",
       InvoiceDetail: "invoice/:invoiceId",
+      // Deep links from the marketing website (homebaseproapp.com).
+      // homebase://provider?providerId=... , homebase://marketplace?categoryId=...
+      ProviderProfile: "provider",
+      ProviderList: "marketplace",
     },
   },
 };
